@@ -1,6 +1,6 @@
 from transformers import MarianMTModel, MarianTokenizer
-from transformers import pipeline
-import torch
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
 
 
 class TranslatorSentimentAnalyzer:
@@ -10,8 +10,9 @@ class TranslatorSentimentAnalyzer:
         self.tokenizer = MarianTokenizer.from_pretrained(self.model_name)
         self.model = MarianMTModel.from_pretrained(self.model_name)
 
-        # Setting up sentiment analysis
-        self.sentiment_pipeline = pipeline("sentiment-analysis")
+        # Setting up sentiment analysis with VADER
+        nltk.download('vader_lexicon')
+        self.sia = SentimentIntensityAnalyzer()
 
     def translate_to_english(self, text):
         translated = self.model.generate(**self.tokenizer.prepare_seq2seq_batch([text], return_tensors="pt"))
@@ -19,7 +20,7 @@ class TranslatorSentimentAnalyzer:
         return translated_text
 
     def analyze_sentiment(self, text):
-        return self.sentiment_pipeline(text)
+        return self.sia.polarity_scores(text)
 
     def evaluate_and_report(self, text):
         # Translate the text
@@ -31,7 +32,13 @@ class TranslatorSentimentAnalyzer:
         # Construct a meaningful report
         report = {
             "translated_text": translated_text,
-            "sentiment_analysis": sentiment_scores
+            "sentiment_analysis": {
+                "positive": f"{sentiment_scores['pos'] * 100:.2f}%",
+                "negative": f"{sentiment_scores['neg'] * 100:.2f}%",
+                "neutral": f"{sentiment_scores['neu'] * 100:.2f}%",
+                "overall_sentiment": "Positive" if sentiment_scores['compound'] > 0.05 else (
+                    "Negative" if sentiment_scores['compound'] < -0.05 else "Neutral")
+            }
         }
 
         return report
@@ -47,5 +54,5 @@ if __name__ == "__main__":
     print(result["translated_text"])
 
     print("\nSentiment Analysis:")
-    for analysis in result["sentiment_analysis"]:
-        print(f"Label: {analysis['label']}, Confidence: {analysis['score'] * 100:.2f}%")
+    for key, value in result["sentiment_analysis"].items():
+        print(f"{key.capitalize()}: {value}")
