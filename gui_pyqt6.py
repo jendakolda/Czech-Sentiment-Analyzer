@@ -1,9 +1,8 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTextEdit, QPushButton, QVBoxLayout, QLabel, QWidget
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QTextEdit, QPushButton,
+                             QVBoxLayout, QWidget, QGroupBox, QHBoxLayout)
 from PyQt6.QtCore import Qt
-import os
 from local import TranslatorSentimentAnalyzer
-
 
 # Assuming TranslatorSentimentAnalyzer class is defined here or imported
 
@@ -14,23 +13,37 @@ class App(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        layout = QVBoxLayout()
-        self.setFixedWidth(500)
+        main_layout = QVBoxLayout()
+
         self.input_text = QTextEdit(self)
         self.input_text.setPlaceholderText("Enter the Czech text to analyze...")
 
         self.translate_btn = QPushButton("Analyze Sentiment", self)
         self.translate_btn.clicked.connect(self.analyze_sentiment)
 
-        self.output_label = QLabel(self)
-        self.output_label.setAlignment(Qt.AlignmentFlag.AlignTop)
+        # Display translated text
+        self.translated_text_display = QTextEdit(self)
+        self.translated_text_display.setReadOnly(True)
+        self.translated_text_display.setPlaceholderText("Translated Text...")
 
-        layout.addWidget(self.input_text)
-        layout.addWidget(self.translate_btn)
-        layout.addWidget(self.output_label)
+        # Group box for results
+        self.result_box = QGroupBox("Results", self)
+        result_layout = QVBoxLayout()
+
+        self.output_text = QTextEdit(self)
+        self.output_text.setReadOnly(True)
+
+        result_layout.addWidget(self.output_text)
+        self.result_box.setLayout(result_layout)
+
+        # Add widgets to main layout
+        main_layout.addWidget(self.input_text)
+        main_layout.addWidget(self.translate_btn)
+        main_layout.addWidget(self.translated_text_display)  # Add translated text display
+        main_layout.addWidget(self.result_box)
 
         central_widget = QWidget()
-        central_widget.setLayout(layout)
+        central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
         self.setWindowTitle('Translator Sentiment Analyzer')
@@ -42,18 +55,17 @@ class App(QMainWindow):
 
         result = analyzer.evaluate_and_report(text)
         translated_text = result['translated_text']
-        sentiment_analysis = result['sentiment_analysis']
+        self.translated_text_display.setPlainText(translated_text)  # Display translated text
 
-        display_text = f"Translated Text:\n{translated_text}\n\n"
-        display_text += "Sentiment Analysis:\n"
+        sentiment_analysis = result['sentiment_analysis']
+        display_text = "Sentiment Analysis:\n"
         for key, value in sentiment_analysis.items():
             display_text += f"{key.capitalize()}: {value}\n"
 
-        self.output_label.setText(display_text)
+        self.output_text.setPlainText(display_text)
 
 
 if __name__ == '__main__':
-    os.environ['QT_QPA_PLATFORM'] = 'xcb'
     app = QApplication(sys.argv)
     ex = App()
     ex.show()
