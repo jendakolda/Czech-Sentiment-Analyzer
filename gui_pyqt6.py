@@ -6,6 +6,7 @@ from local import TranslatorSentimentAnalyzer
 
 # Assuming TranslatorSentimentAnalyzer class is defined here or imported
 
+
 class App(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -54,7 +55,7 @@ class App(QMainWindow):
         analyzer = TranslatorSentimentAnalyzer()
 
         result = analyzer.evaluate_and_report(text)
-        translated_text = result['translated_text']
+        translated_text = result['translated_text']  # todo
         self.translated_text_display.setPlainText(translated_text)  # Display translated text
 
         sentiment_analysis = result['sentiment_analysis']
