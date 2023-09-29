@@ -1,6 +1,7 @@
 from transformers import MarianMTModel, MarianTokenizer
 import nltk
 from nltk.sentiment import SentimentIntensityAnalyzer
+import torch
 
 
 class TranslatorSentimentAnalyzer:
@@ -14,46 +15,82 @@ class TranslatorSentimentAnalyzer:
         nltk.download('vader_lexicon')
         self.sia = SentimentIntensityAnalyzer()
 
-    def translate_to_english(self, text):
-        model_inputs = self.tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
-        translated = self.model.generate(**model_inputs)
-        translated_text = self.tokenizer.decode(translated[0], skip_special_tokens=True)
-        return translated_text
+        # Initialize cache
+        self.cache = {}
+
+    def translate_to_english(self, texts):
+        # Using cache
+        translations = []
+        for text in texts:
+            if text in self.cache:
+                translations.append(self.cache[text])
+            else:
+                try:
+                    model_inputs = self.tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
+                    translated = self.model.generate(**model_inputs)
+                    translated_text = self.tokenizer.decode(translated[0], skip_special_tokens=True)
+                    self.cache[text] = translated_text
+                    translations.append(translated_text)
+                except Exception as e:
+                    print(f"Error translating text: {str(e)}")
+                    translations.append("")
+        return translations
 
     def analyze_sentiment(self, text):
-        return self.sia.polarity_scores(text)
+        try:
+            return self.sia.polarity_scores(text)
+        except Exception as e:
+            print(f"Error analyzing sentiment: {str(e)}")
+            return {'pos': 0, 'neg': 0, 'neu': 1, 'compound': 0}
 
-    def evaluate_and_report(self, text):
-        # Translate the text
-        translated_text = self.translate_to_english(text)
+    def get_overall_sentiment(self, score):
+        if score > 0.05:
+            return "Positive"
+        elif 0.05 >= score > -0.05:
+            return "Neutral"
+        elif -0.05 >= score > -0.6:
+            return "Somewhat Negative"
+        else:
+            return "Very Negative"
 
-        # Get sentiment scores
-        sentiment_scores = self.analyze_sentiment(translated_text)
+    def evaluate_and_report(self, texts):
+        if not isinstance(texts, list):
+            texts = [texts]
 
-        # Construct a meaningful report
-        report = {
-            "translated_text": translated_text,
-            "sentiment_analysis": {
-                "positive": f"{sentiment_scores['pos'] * 100:.2f}%",
-                "negative": f"{sentiment_scores['neg'] * 100:.2f}%",
-                "neutral": f"{sentiment_scores['neu'] * 100:.2f}%",
-                "overall_sentiment": "Positive" if sentiment_scores['compound'] > 0.05 else (
-                    "Negative" if sentiment_scores['compound'] < -0.05 else "Neutral")
+        # Translate the texts
+        translated_texts = self.translate_to_english(texts)
+
+        # Get sentiment scores and construct reports
+        reports = []
+        for translated_text in translated_texts:
+            sentiment_scores = self.analyze_sentiment(translated_text)
+
+            report = {
+                "translated_text": translated_text,
+                "sentiment_analysis": {
+                    "positive": f"{sentiment_scores['pos'] * 100:.2f}%",
+                    "negative": f"{sentiment_scores['neg'] * 100:.2f}%",
+                    "neutral": f"{sentiment_scores['neu'] * 100:.2f}%",
+                    "overall_sentiment": self.get_overall_sentiment(sentiment_scores['compound'])
+                }
             }
-        }
 
-        return report
+            reports.append(report)
+
+        return reports
 
 
 if __name__ == "__main__":
     analyzer = TranslatorSentimentAnalyzer()
 
-    czech_text = input("Enter the Czech text to analyze: ").strip()
-    result = analyzer.evaluate_and_report(czech_text)
+    czech_texts = input("Enter the Czech text(s) to analyze (separate by '|'): ").strip().split('|')
+    results = analyzer.evaluate_and_report(czech_texts)
 
-    print("\nTranslated Text:")
-    print(result["translated_text"])
-
-    print("\nSentiment Analysis:")
-    for key, value in result["sentiment_analysis"].items():
-        print(f"{key.capitalize()}: {value}")
+    for idx, result in enumerate(results):
+        print(f"Text {idx + 1}:")
+        print("Translated Text:")
+        print(result["translated_text"])
+        print("\nSentiment Analysis:")
+        for key, value in result["sentiment_analysis"].items():
+            print(f"{key.capitalize()}: {value}")
+        print("\n" + "-" * 50 + "\n")
