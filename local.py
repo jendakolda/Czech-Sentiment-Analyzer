@@ -15,7 +15,8 @@ class TranslatorSentimentAnalyzer:
         self.sia = SentimentIntensityAnalyzer()
 
     def translate_to_english(self, text):
-        translated = self.model.generate(**self.tokenizer.prepare_seq2seq_batch([text], return_tensors="pt"))
+        model_inputs = self.tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
+        translated = self.model.generate(**model_inputs)
         translated_text = self.tokenizer.decode(translated[0], skip_special_tokens=True)
         return translated_text
 
