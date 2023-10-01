@@ -1,7 +1,6 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QTextEdit, QPushButton,
                              QVBoxLayout, QWidget, QGroupBox, QHBoxLayout)
-from PyQt6.QtCore import Qt
 from local import TranslatorSentimentAnalyzer
 
 # Assuming TranslatorSentimentAnalyzer class is defined here or imported
@@ -54,8 +53,9 @@ class App(QMainWindow):
         text = self.input_text.toPlainText()
         analyzer = TranslatorSentimentAnalyzer()
 
-        result = analyzer.evaluate_and_report(text)
-        translated_text = result['translated_text']  # todo
+        results = analyzer.evaluate_and_report(text)
+        result = results[0]
+        translated_text = result['translated_text']
         self.translated_text_display.setPlainText(translated_text)  # Display translated text
 
         sentiment_analysis = result['sentiment_analysis']
