@@ -1,8 +1,6 @@
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, ttk
 from local import TranslatorSentimentAnalyzer
-
-# Assuming TranslatorSentimentAnalyzer class is defined here or imported
 
 
 class App(tk.Tk):
@@ -12,36 +10,52 @@ class App(tk.Tk):
         self.title('Translator Sentiment Analyzer')
         self.geometry('500x400')
 
-        self.input_label = tk.Label(self, text="Enter the Czech text to analyze:")
-        self.input_label.pack(pady=10)
+        self.initUI()
 
-        self.input_text = scrolledtext.ScrolledText(self, height=10, wrap=tk.WORD)
-        self.input_text.pack(pady=10, padx=10, fill=tk.BOTH)
+    def initUI(self):
+        # Input Text Widget
+        self.input_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=5)
+        self.input_text.insert(tk.INSERT, '')
+        self.input_text.pack(pady=10)
 
-        self.translate_btn = tk.Button(self, text="Analyze Sentiment", command=self.analyze_sentiment)
+        # Analyze Sentiment Button
+        self.translate_btn = ttk.Button(self, text="Analyze Sentiment", command=self.analyze_sentiment)
         self.translate_btn.pack(pady=10)
 
-        self.output_label = tk.Label(self, text="Results:")
-        self.output_label.pack(pady=10)
+        # Display translated text
+        self.translated_text_display = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=5, state=tk.DISABLED)
+        self.translated_text_display.insert(tk.INSERT, '')
+        self.translated_text_display.pack(pady=10)
 
-        self.output_text = scrolledtext.ScrolledText(self, height=10, wrap=tk.WORD)
-        self.output_text.pack(pady=10, padx=10, fill=tk.BOTH)
+        # Display sentiment results
+        self.result_label = ttk.Label(self, text="Sentiment Analysis:")
+        self.result_label.pack()
+
+        self.output_text = scrolledtext.ScrolledText(self, wrap=tk.WORD, height=5, state=tk.DISABLED)
+        self.output_text.insert(tk.INSERT, '')
+        self.output_text.pack(pady=10)
 
     def analyze_sentiment(self):
-        text = self.input_text.get("1.0", tk.END)
+        text = self.input_text.get("1.0", tk.END).strip()
         analyzer = TranslatorSentimentAnalyzer()
 
-        result = analyzer.evaluate_and_report(text)
+        results = analyzer.evaluate_and_report(text)
+        result = results[0]
+
         translated_text = result['translated_text']
+        self.translated_text_display.config(state=tk.NORMAL)
+        self.translated_text_display.delete("1.0", tk.END)
+        self.translated_text_display.insert(tk.INSERT, translated_text)
+        self.translated_text_display.config(state=tk.DISABLED)
+
         sentiment_analysis = result['sentiment_analysis']
+        display_text = "\n".join([f"{key.capitalize()}: {value}" for key, value in sentiment_analysis.items()])
 
-        display_text = f"Translated Text:\n{translated_text}\n\n"
-        display_text += "Sentiment Analysis:\n"
-        for key, value in sentiment_analysis.items():
-            display_text += f"{key.capitalize()}: {value}\n"
-
+        self.output_text.config(state=tk.NORMAL)
         self.output_text.delete("1.0", tk.END)
-        self.output_text.insert(tk.END, display_text)
+        self.output_text.insert(tk.INSERT, display_text)
+        self.output_text.config(state=tk.DISABLED)
+
 
 if __name__ == '__main__':
     app = App()
