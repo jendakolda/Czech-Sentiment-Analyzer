@@ -1,104 +1,88 @@
+import json
 from transformers import MarianMTModel, MarianTokenizer
 import nltk
 import re
 import string
 import matplotlib.pyplot as plt
 from nltk.sentiment import SentimentIntensityAnalyzer
+from pathlib import Path
 
-
-class TranslatorSentimentAnalyzer:
-    def __init__(self):
-        # Setting up the translator
-        self.model_name = 'Helsinki-NLP/opus-mt-cs-en'
+class Translator:
+    def __init__(self, model_name):
+        self.model_name = model_name
         self.tokenizer = MarianTokenizer.from_pretrained(self.model_name)
         self.model = MarianMTModel.from_pretrained(self.model_name)
+        self.cache = {}
 
-        # Setting up sentiment analysis with VADER
+    def translate(self, text):
+        if text in self.cache:
+            return self.cache[text]
+        model_inputs = self.tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
+        translated = self.model.generate(**model_inputs)
+        translated_text = self.tokenizer.decode(translated[0], skip_special_tokens=True)
+        self.cache[text] = translated_text
+        return translated_text
+
+class SentimentAnalyzer:
+    def __init__(self):
         nltk.download('vader_lexicon')
         self.sia = SentimentIntensityAnalyzer()
 
-        # Initialize cache
-        self.cache = {}
+    def analyze(self, text):
+        return self.sia.polarity_scores(text)
 
-    def preprocess_text(self, text):
-        # Basic Preprocessing: Removing URLs, special characters, and converting to lowercase
-        text = text.lower()
-        text = re.sub(r'http\S+|www\S+|https\S+', '', text, flags=re.MULTILINE)
-        text = re.sub(r'\@\w+|\#', '', text)
-        text = text.translate(str.maketrans('', '', string.punctuation))
-        return text
+class TranslatorSentimentAnalyzer:
+    def __init__(self, translator_model_name='Helsinki-NLP/opus-mt-cs-en', input_file='input.txt'):
+        self.translator = Translator(translator_model_name)
+        self.sentiment_analyzer = SentimentAnalyzer()
+        self.input_file = Path(input_file)
+        self.texts = []
 
-    def translate_to_english(self, texts):
-        translations = []
-        for text in texts:
-            if text in self.cache:
-                translations.append(self.cache[text])
-            else:
-                try:
-                    model_inputs = self.tokenizer(text, return_tensors="pt", max_length=512, truncation=True)
-                    translated = self.model.generate(**model_inputs)
-                    translated_text = self.tokenizer.decode(translated[0], skip_special_tokens=True)
-                    translated_text = self.preprocess_text(translated_text)
-                    self.cache[text] = translated_text
-                    translations.append(translated_text)
-                except Exception as e:
-                    print(f"Error translating text: {str(e)}")
-                    translations.append("")
-        return translations
+    def get_input_texts(self):
+        if self.input_file.exists():
+            with self.input_file.open("r") as file:
+                self.texts = file.read().strip().split("\n\n")
+        else:
+            self.texts = input("Enter the Czech text(s) to analyze (separate by '|'): ").strip().split('|')
 
-    def analyze_sentiment(self, text):
-        try:
-            return self.sia.polarity_scores(text)
-        except Exception as e:
-            print(f"Error analyzing sentiment: {str(e)}")
-            return {'pos': 0, 'neg': 0, 'neu': 1, 'compound': 0}
+    def process_texts(self):
+        results = self.evaluate_texts()
 
-    def visualize_sentiments(self, sentiments):
-        positive_scores = [x["sentiment_analysis"]["positive"] for x in sentiments]
-        negative_scores = [x["sentiment_analysis"]["negative"] for x in sentiments]
-        neutral_scores = [x["sentiment_analysis"]["neutral"] for x in sentiments]
+        if self.input_file.exists():
+            self.save_results_to_json(results)
+        else:
+            for idx, result in enumerate(results):
+                print(f"Text {idx + 1}:")
+                print("Translated Text:")
+                print(result["translated_text"])
+                print("\nSentiment Analysis:")
+                for key, value in result["sentiment_analysis"].items():
+                    print(f"{key.capitalize()}: {value}")
+                print("\n" + "-" * 50 + "\n")
 
-        plt.plot(positive_scores, label="Positive", color="green")
-        plt.plot(negative_scores, label="Negative", color="red")
-        plt.plot(neutral_scores, label="Neutral", color="blue")
-        plt.ylabel('Score')
-        plt.title('Sentiment Scores')
-        plt.legend()
-        plt.show()
+            self.visualize_sentiments(results)
 
-    def feedback_mechanism(self, sentiment_scores):
-        # Here, we will simply print out a feedback if a text has strong negative sentiment
-        if sentiment_scores['compound'] < -0.6:
-            print("Warning: Strong negative sentiment detected. Consider reviewing relevant aspects.")
-
-    def evaluate_and_report(self, texts):
-        if not isinstance(texts, list):
-            texts = [texts]
-
-        # Translate the texts
-        translated_texts = self.translate_to_english(texts)
-
-        # Get sentiment scores and construct reports
+    def evaluate_texts(self):
         reports = []
-        for translated_text in translated_texts:
-            sentiment_scores = self.analyze_sentiment(translated_text)
-
+        for idx, text in enumerate(self.texts):
+            translated_text = self.translator.translate(text)
+            sentiment_scores = self.sentiment_analyzer.analyze(translated_text)
             report = {
+                "text_index": idx + 1,
+                "original_text": text,
                 "translated_text": translated_text,
                 "sentiment_analysis": {
-                    "positive": f"{sentiment_scores['pos'] * 100:.2f}%",
-                    "negative": f"{sentiment_scores['neg'] * 100:.2f}%",
-                    "neutral": f"{sentiment_scores['neu'] * 100:.2f}%",
+                    "pos": f"{sentiment_scores['pos'] * 100:.2f}%",
+                    "neg": f"{sentiment_scores['neg'] * 100:.2f}%",
+                    "neu": f"{sentiment_scores['neu'] * 100:.2f}%",
                     "overall_sentiment": self.get_overall_sentiment(sentiment_scores['compound'])
                 }
             }
-
             reports.append(report)
-            self.feedback_mechanism(sentiment_scores)
-
         return reports
 
-    def get_overall_sentiment(self, score):
+    @staticmethod
+    def get_overall_sentiment(score):
         if score > 0.6:
             return "Very Positive"
         elif 0.6 >= score > 0.1:
@@ -110,21 +94,25 @@ class TranslatorSentimentAnalyzer:
         else:
             return "Very Negative"
 
+    @staticmethod
+    def save_results_to_json(results):
+        with open("output.json", "w") as file:
+            json.dump(results, file, indent=4)
+
+    def visualize_sentiments(self, sentiments):
+        positive_scores = [x["sentiment_analysis"]["pos"] for x in sentiments]
+        negative_scores = [x["sentiment_analysis"]["neg"] for x in sentiments]
+        neutral_scores = [x["sentiment_analysis"]["neu"] for x in sentiments]
+
+        plt.plot(positive_scores, label="Positive", color="green")
+        plt.plot(negative_scores, label="Negative", color="red")
+        plt.plot(neutral_scores, label="Neutral", color="blue")
+        plt.ylabel('Score')
+        plt.title('Sentiment Scores')
+        plt.legend()
+        plt.show()
 
 if __name__ == "__main__":
     analyzer = TranslatorSentimentAnalyzer()
-
-    czech_texts = input("Enter the Czech text(s) to analyze (separate by '|'): ").strip().split('|')
-    results = analyzer.evaluate_and_report(czech_texts)
-
-    for idx, result in enumerate(results):
-        print(f"Text {idx + 1}:")
-        print("Translated Text:")
-        print(result["translated_text"])
-        print("\nSentiment Analysis:")
-        for key, value in result["sentiment_analysis"].items():
-            print(f"{key.capitalize()}: {value}")
-        print("\n" + "-" * 50 + "\n")
-
-    # Visualization
-    analyzer.visualize_sentiments(results)
+    analyzer.get_input_texts()
+    analyzer.process_texts()
